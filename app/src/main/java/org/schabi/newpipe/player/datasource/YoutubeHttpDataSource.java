@@ -44,6 +44,7 @@ import com.google.common.net.HttpHeaders;
 import org.schabi.newpipe.DownloaderImpl;
 
 import java.io.IOException;
+import java.util.function.Function;
 import java.io.InputStream;
 import java.io.InterruptedIOException;
 import java.io.OutputStream;
@@ -95,6 +96,9 @@ public final class YoutubeHttpDataSource extends BaseDataSource implements HttpD
         private boolean rangeParameterEnabled;
         private boolean rnParameterEnabled;
 
+        @Nullable
+        private Function<String, String> cookieProvider;
+
         /**
          * Creates an instance.
          */
@@ -109,6 +113,18 @@ public final class YoutubeHttpDataSource extends BaseDataSource implements HttpD
         public Factory setDefaultRequestProperties(
                 @NonNull final Map<String, String> defaultRequestPropertiesMap) {
             defaultRequestProperties.clearAndSet(defaultRequestPropertiesMap);
+            return this;
+        }
+
+        /**
+         * Sets a function that provides cookies for a given URL.
+         *
+         * @param cookieProvider A function that takes a URL and returns the cookie string,
+         *                       or {@code null} to not send cookies.
+         * @return This factory.
+         */
+        public Factory setCookieProvider(@Nullable final Function<String, String> cookieProvider) {
+            this.cookieProvider = cookieProvider;
             return this;
         }
 
@@ -251,7 +267,8 @@ public final class YoutubeHttpDataSource extends BaseDataSource implements HttpD
                     rnParameterEnabled,
                     defaultRequestProperties,
                     contentTypePredicate,
-                    keepPostFor302Redirects);
+                    keepPostFor302Redirects,
+                    cookieProvider);
             if (transferListener != null) {
                 dataSource.addTransferListener(transferListener);
             }
@@ -283,6 +300,8 @@ public final class YoutubeHttpDataSource extends BaseDataSource implements HttpD
     @Nullable
     private final Predicate<String> contentTypePredicate;
     @Nullable
+    private final Function<String, String> cookieProvider;
+    @Nullable
     private DataSpec dataSpec;
     @Nullable
     private HttpURLConnection connection;
@@ -303,7 +322,8 @@ public final class YoutubeHttpDataSource extends BaseDataSource implements HttpD
                                   final boolean rnParameterEnabled,
                                   @Nullable final RequestProperties defaultRequestProperties,
                                   @Nullable final Predicate<String> contentTypePredicate,
-                                  final boolean keepPostFor302Redirects) {
+                                  final boolean keepPostFor302Redirects,
+                                  @Nullable final Function<String, String> cookieProvider) {
         super(true);
         this.connectTimeoutMillis = connectTimeoutMillis;
         this.readTimeoutMillis = readTimeoutMillis;
@@ -314,6 +334,7 @@ public final class YoutubeHttpDataSource extends BaseDataSource implements HttpD
         this.contentTypePredicate = contentTypePredicate;
         this.requestProperties = new RequestProperties();
         this.keepPostFor302Redirects = keepPostFor302Redirects;
+        this.cookieProvider = cookieProvider;
         this.requestNumber = 0;
     }
 
@@ -647,6 +668,14 @@ public final class YoutubeHttpDataSource extends BaseDataSource implements HttpD
 
         for (final Map.Entry<String, String> property : requestHeaders.entrySet()) {
             httpURLConnection.setRequestProperty(property.getKey(), property.getValue());
+        }
+
+        // Add cookie if cookie provider is set
+        if (cookieProvider != null) {
+            final String cookie = cookieProvider.apply(requestUrl);
+            if (cookie != null && !cookie.isEmpty()) {
+                httpURLConnection.setRequestProperty(HttpHeaders.COOKIE, cookie);
+            }
         }
 
         if (!rangeParameterEnabled) {

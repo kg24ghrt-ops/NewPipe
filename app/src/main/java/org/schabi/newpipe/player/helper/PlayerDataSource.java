@@ -202,7 +202,8 @@ public class PlayerDataSource {
             final boolean rnParameterEnabled) {
         return new YoutubeHttpDataSource.Factory()
                 .setRangeParameterEnabled(rangeParameterEnabled)
-                .setRnParameterEnabled(rnParameterEnabled);
+                .setRnParameterEnabled(rnParameterEnabled)
+                .setCookieProvider(url -> DownloaderImpl.getInstance().getCookies(url));
     }
 
     private static void instantiateCacheIfNeeded(final Context context) {
